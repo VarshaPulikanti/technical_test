@@ -15,6 +15,7 @@ from youtube_transcript_api._errors import (
 )
 
 from app.models.schemas import VideoMetadata
+from app.services.transcript_utils import fetch_subtitle_from_info, hook_snippet
 
 
 def _extract_youtube_id(url: str) -> str | None:
@@ -83,22 +84,14 @@ def _youtube_transcript(video_id: str) -> str:
 
 
 def _subtitle_from_ytdlp(info: dict[str, Any]) -> str:
-    subs = info.get("subtitles") or {}
-    auto = info.get("automatic_captions") or {}
-    for pool in (subs, auto):
-        for lang in ("en", "en-US", "en-GB"):
-            tracks = pool.get(lang)
-            if not tracks:
-                continue
-            for track in tracks:
-                if track.get("ext") in ("vtt", "json3", "srv1", "srv2", "srv3"):
-                    # yt-dlp already merges some captions into description for IG — skip network fetch
-                    break
+    text = fetch_subtitle_from_info(info)
+    if text:
+        return text
     desc = info.get("description") or ""
     return desc.strip()
 
 
-def _platform_from_url(url: str) -> str:
+def platform_from_url(url: str) -> str:
     lower = url.lower()
     if "instagram.com" in lower:
         return "instagram"
@@ -110,7 +103,7 @@ def _platform_from_url(url: str) -> str:
 def fetch_video(url: str, video_id: str) -> tuple[VideoMetadata, str]:
     """Return metadata model + full transcript text."""
     info = _fetch_ytdlp_info(url)
-    platform = _platform_from_url(url)
+    platform = platform_from_url(url)
 
     views = _safe_int(info.get("view_count"))
     likes = _safe_int(info.get("like_count"))
@@ -140,6 +133,7 @@ def fetch_video(url: str, video_id: str) -> tuple[VideoMetadata, str]:
         transcript = "\n".join(p for p in parts if p).strip()
 
     engagement = _engagement_rate(views, likes, comments)
+    hook = hook_snippet(transcript, duration_seconds)
 
     meta = VideoMetadata(
         video_id=video_id,  # type: ignore[arg-type]
@@ -156,6 +150,7 @@ def fetch_video(url: str, video_id: str) -> tuple[VideoMetadata, str]:
         duration_seconds=duration_seconds,
         engagement_rate=engagement,
         transcript_preview=(transcript[:280] + "…") if len(transcript) > 280 else transcript,
+        hook_preview=hook or None,
     )
     return meta, transcript
 
@@ -178,6 +173,7 @@ def metadata_context_json(videos: list[VideoMetadata]) -> str:
                 "hashtags": v.hashtags,
                 "upload_date": v.upload_date,
                 "duration_seconds": v.duration_seconds,
+                "hook_preview_first_5s": v.hook_preview,
                 "url": v.url,
             }
         )

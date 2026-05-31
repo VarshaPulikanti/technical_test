@@ -112,6 +112,7 @@ def _docs_to_sources(docs: list[Document]) -> list[ChatSource]:
                 chunk_index=idx,
                 snippet=snippet,
                 platform=meta.get("platform"),
+                is_hook=bool(meta.get("is_hook")),
             )
         )
     return sources

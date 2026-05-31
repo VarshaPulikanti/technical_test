@@ -23,6 +23,7 @@ class VideoMetadata(BaseModel):
     duration_seconds: float | None = None
     engagement_rate: float | None = None
     transcript_preview: str | None = None
+    hook_preview: str | None = None
 
 
 class IngestResponse(BaseModel):
@@ -41,6 +42,7 @@ class ChatSource(BaseModel):
     chunk_index: int
     snippet: str
     platform: str | None = None
+    is_hook: bool = False
 
 
 class ChatResponse(BaseModel):

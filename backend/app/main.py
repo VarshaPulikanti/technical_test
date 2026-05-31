@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.models.schemas import ChatRequest, ChatResponse, IngestRequest, IngestResponse, SessionState
 from app.services import rag, session_store, vector_store
-from app.services.video_fetcher import fetch_video
+from app.services.video_fetcher import fetch_video, platform_from_url
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("API ready")
+    session_store.load_sessions()
+    logger.info("API ready — %s sessions loaded", len(session_store.list_sessions()))
     yield
 
 
@@ -44,6 +45,11 @@ def ingest(body: IngestRequest):
     session_id = vector_store.new_session_id()
     youtube_url = str(body.youtube_url)
     instagram_url = str(body.instagram_url)
+
+    if platform_from_url(youtube_url) != "youtube":
+        raise HTTPException(status_code=400, detail="Video A must be a YouTube URL")
+    if platform_from_url(instagram_url) != "instagram":
+        raise HTTPException(status_code=400, detail="Video B must be an Instagram Reel URL")
 
     try:
         meta_a, transcript_a = fetch_video(youtube_url, "A")
