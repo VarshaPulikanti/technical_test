@@ -1,0 +1,25 @@
+# env
+.env
+.env.local
+*.pem
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+backend/.chroma/
+backend/data/
+
+# node
+node_modules/
+.next/
+out/
+dist/
+
+# os / ide
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
