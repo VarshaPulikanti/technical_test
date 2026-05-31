@@ -64,7 +64,7 @@ export function VideoCard({ video, label }: Props) {
         </div>
         <div>
           <dt>Engagement</dt>
-          <dd>
+          <dd title="(likes + comments) / views × 100">
             {video.engagement_rate != null
               ? `${video.engagement_rate.toFixed(2)}%`
               : "—"}
@@ -86,6 +86,12 @@ export function VideoCard({ video, label }: Props) {
 
       {video.hashtags.length > 0 && (
         <p className="tags">{video.hashtags.map((t) => `#${t}`).join(" ")}</p>
+      )}
+
+      {video.hook_preview && (
+        <p className="preview">
+          <strong>Hook (~5s):</strong> {video.hook_preview}
+        </p>
       )}
 
       {video.transcript_preview && (

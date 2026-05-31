@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
 import type { ChatMessage, ChatSource } from "@/lib/types";
 
@@ -22,6 +22,11 @@ export function ChatPanel({ sessionId, disabled }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMessages([]);
+    setInput("");
+  }, [sessionId]);
 
   const scrollDown = () => {
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -84,6 +89,7 @@ export function ChatPanel({ sessionId, disabled }: Props) {
                 {m.sources.map((s, j) => (
                   <li key={j}>
                     <strong>Video {s.video_id}</strong> chunk {s.chunk_index}
+                    {s.is_hook ? " · hook" : ""}
                     {s.platform ? ` (${s.platform})` : ""}: {s.snippet}
                   </li>
                 ))}

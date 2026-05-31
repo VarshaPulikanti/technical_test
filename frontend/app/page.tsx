@@ -5,8 +5,9 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { VideoCard } from "@/components/VideoCard";
 import { ingestVideos } from "@/lib/api";
 import type { VideoMetadata } from "@/lib/types";
+import { isInstagramReelUrl, isYouTubeUrl } from "@/lib/validate";
 
-const DEFAULT_YT = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+const DEFAULT_YT = "";
 const DEFAULT_IG = "";
 
 export default function Home() {
@@ -19,6 +20,15 @@ export default function Home() {
   const [status, setStatus] = useState<string | null>(null);
 
   const runIngest = async () => {
+    if (!isYouTubeUrl(youtubeUrl)) {
+      setStatus("Video A must be a valid YouTube link");
+      return;
+    }
+    if (!isInstagramReelUrl(instagramUrl)) {
+      setStatus("Video B must be a valid Instagram Reel / post link");
+      return;
+    }
+
     setLoading(true);
     setStatus("Fetching metadata, transcripts, embedding chunks…");
     try {
@@ -92,7 +102,7 @@ export default function Home() {
             <p className="empty">Video B card appears after ingest</p>
           </div>
         )}
-        <ChatPanel sessionId={sessionId} disabled={!sessionId} />
+        <ChatPanel key={sessionId ?? "idle"} sessionId={sessionId} disabled={!sessionId} />
       </div>
 
       {chunkCount > 0 && (

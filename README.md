@@ -1,59 +1,50 @@
-# Creator Compare — Full-Stack RAG (Technical Test)
+# Creator Compare — technical screening project
 
-Side-by-side **YouTube (Video A)** vs **Instagram Reel (Video B)** with dynamic metadata, transcript chunking, **ChromaDB** vectors, and a **LangChain** RAG chat that **streams** answers with **chunk citations** and **multi-turn memory**.
+I built a full-stack RAG app that ingests **one YouTube video (A)** and **one Instagram Reel (B)**, pulls real metadata + transcripts, indexes chunks in **ChromaDB**, and lets a creator chat with **LangChain** over both — streaming answers, chunk citations, and multi-turn memory.
 
-## What it does
+Repo: https://github.com/VarshaPulikanti/technical_test
 
-1. Ingest two URLs (YouTube + Instagram — required).
-2. Pull **transcript + metadata** (views, likes, comments, creator, followers, hashtags, date, duration) via **yt-dlp** + **youtube-transcript-api**.
-3. Compute **engagement rate** = `(likes + comments) / views × 100`.
-4. **Chunk** transcripts (800 chars / 120 overlap), **embed** with OpenAI `text-embedding-3-small`, store in **ChromaDB** with `video_id` ∈ `{A, B}` on every chunk.
-5. Chat (LangChain history-aware retriever + stuff chain): compare engagement, hooks, creators, improvement ideas — **streaming NDJSON**, **sources**, **session memory**.
+## Requirements mapping
 
-## Stack choices (and why)
+| Requirement | How it's done |
+|-------------|----------------|
+| YouTube + Instagram URLs | `/api/ingest` validates platform; A = YouTube, B = Instagram |
+| Transcript + metadata | `yt-dlp` + `youtube-transcript-api`; IG captions via subtitle URLs when available |
+| Engagement rate | `(likes + comments) / views × 100` computed on ingest |
+| Chunk + embed + vector DB | LangChain splitter → OpenAI embeddings → **ChromaDB**, every chunk tagged `video_id` A or B |
+| RAG chat | LangChain history-aware retriever + retrieval chain |
+| Stream + cite + memory | `POST /api/chat/stream` (NDJSON); sources show video + chunk (+ hook flag); session history |
+| Frontend | Next.js — two video cards + chat panel |
 
-| Layer | Choice | Reasoning |
-|--------|--------|-----------|
-| Frontend | Next.js 15 (React) | Fast dev, SSE-friendly fetch streaming, easy deploy to Vercel |
-| Backend | FastAPI | Async streaming, typed APIs, low overhead |
-| Orchestration | **LangChain** | Required; history-aware RAG + citation context out of the box |
-| Embeddings | OpenAI `text-embedding-3-small` | Best cost/quality for short creator transcripts at scale |
-| Vector DB | **ChromaDB** (local persist) | Zero hosted DB cost for screening; swap to Pinecone/Qdrant at ~1k creators/day with same metadata schema |
-| LLM | `gpt-4o-mini` | ~20× cheaper than GPT-4o for analytics Q&A; upgrade path to 4o for complex reasoning |
-| Transcripts | yt-dlp + youtube-transcript-api | No paid AssemblyAI needed for demo; IG falls back to description/title when captions missing |
+## Why this stack
 
-### Scale / cost (@ ~1000 creators/day)
+- **FastAPI** — async streaming without much boilerplate.
+- **LangChain** — required; history-aware retrieval + stuff chain is enough for this scope (LangGraph if we add tool-routing later).
+- **ChromaDB (persisted)** — $0 for the demo; same metadata schema ports to Qdrant/Pinecone when we hit ~1k creators/day.
+- **text-embedding-3-small** — cheap, good enough for short captions.
+- **gpt-4o-mini** — analytics Q&A at ~20× lower cost than 4o; bump model only if answers get sloppy.
 
-- **Ingest** is the expensive step (2 videos × embed once). Batch overnight, cache metadata + vectors keyed by `video_id` + content hash.
-- **Chroma** on disk works for MVP; at 10k+ sessions use **Qdrant Cloud** or **Pinecone serverless** (~$50–150/mo) with namespaces per creator.
-- **Embeddings**: ~2–6 chunks/video → ~4k embed calls/day → low tens of USD/day on small model; cache embeddings when transcript unchanged.
-- **Chat**: stream `gpt-4o-mini`; cap `k=6` retrieval to control tokens; Redis for session memory when running >1 API replica.
+### At ~1000 creators/day
 
-**If I had to optimize further:** precompute engagement metrics in SQL/Postgres (no LLM), use RAG only for transcript/hook questions; route factual metrics questions to a structured tool.
+- **Cost driver** = ingest (2 embeds per creator per batch). Cache vectors + metadata by video URL hash so re-ingest is skipped.
+- **~4k–12k embed calls/day** on small model → tens of USD/day, not hundreds, if we don't re-embed unchanged transcripts.
+- **Chat** — cap retrieval `k=6`, stream mini model, store session history in **Redis** once we run multiple API replicas.
+- **What I'd change at 10k+ creators:** managed Qdrant/Pinecone, Postgres for metrics (engagement doesn't need an LLM), queue workers for ingest (Celery/SQS).
 
-## Quick start
+## Run locally
 
-### Prerequisites
-
-- Python 3.11+
-- Node 20+
-- [OpenAI API key](https://platform.openai.com/api-keys)
-- `ffmpeg` optional (yt-dlp uses it for some formats)
-
-### Backend
+**Backend**
 
 ```bash
 cd backend
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
+.venv\Scripts\activate          # Windows
 pip install -r requirements.txt
-copy .env.example .env
-# set OPENAI_API_KEY in .env
+copy .env.example .env          # add OPENAI_API_KEY
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend
@@ -62,32 +53,29 @@ copy .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000 — paste a **real** YouTube URL and **Instagram Reel** URL, click **Ingest & index**, then use chat starters.
+Open http://localhost:3000 → paste **real** YouTube + Instagram URLs → **Ingest & index** → use chat starters.
+
+See [DEMO.md](./DEMO.md) for the Loom walkthrough.
 
 ## API
 
-| Method | Path | Description |
-|--------|------|-------------|
+| Method | Path | Notes |
+|--------|------|--------|
 | POST | `/api/ingest` | `{ youtube_url, instagram_url }` |
-| GET | `/api/session/{id}` | Session metadata |
-| POST | `/api/chat/stream` | NDJSON stream: `token`, `sources`, `done` |
-| POST | `/api/chat` | Non-streaming fallback |
+| GET | `/api/session/{id}` | Cards data + chunk count |
+| POST | `/api/chat/stream` | NDJSON: `token`, `sources`, `done` |
 
-## Project layout
+## Layout
 
 ```
-backend/app/          FastAPI + LangChain + Chroma
-frontend/             Next.js UI (cards + chat)
+backend/app/services/   ingestion, Chroma, LangChain RAG
+frontend/               Next.js UI
 ```
 
-## Loom demo checklist
+## Env
 
-1. Fresh ingest with two public URLs (YT + IG).
-2. Show cards: views, engagement %, creator, hashtags.
-3. Ask all five sample questions — show streaming + citations.
-4. Follow-up question to prove **memory**.
-5. Explain cost/scaling trade-offs (see table above).
+Copy `backend/.env.example` → `backend/.env` and `frontend/.env.example` → `frontend/.env.local`.
 
-## Author
+---
 
-Varsha Pulikanti — technical screening submission.
+Built by Varsha Pulikanti for the engineer technical screen.

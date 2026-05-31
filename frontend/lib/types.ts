@@ -15,6 +15,7 @@ export interface VideoMetadata {
   duration_seconds?: number | null;
   engagement_rate?: number | null;
   transcript_preview?: string | null;
+  hook_preview?: string | null;
 }
 
 export interface IngestResponse {
@@ -28,6 +29,7 @@ export interface ChatSource {
   chunk_index: number;
   snippet: string;
   platform?: string | null;
+  is_hook?: boolean;
 }
 
 export interface ChatMessage {
