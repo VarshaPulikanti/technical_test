@@ -70,17 +70,28 @@ def _fetch_ytdlp_info(url: str) -> dict[str, Any]:
         return ydl.extract_info(url, download=False)
 
 
-def _youtube_transcript(video_id: str) -> str:
+def _transcript_to_text(fetched) -> str:
     try:
-        segments = YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US", "en-GB"])
+        return " ".join(snip.text for snip in fetched).strip()
+    except (TypeError, AttributeError):
+        raw = fetched.to_raw_data() if hasattr(fetched, "to_raw_data") else fetched
+        return " ".join(seg.get("text", "") for seg in raw).strip()
+
+
+def _youtube_transcript(video_id: str) -> str:
+    api = YouTubeTranscriptApi()
+    try:
+        fetched = api.fetch(video_id, languages=["en", "en-US", "en-GB"])
+        return _transcript_to_text(fetched)
     except (NoTranscriptFound, TranscriptsDisabled, VideoUnavailable):
         try:
-            listing = YouTubeTranscriptApi.list_transcripts(video_id)
+            listing = api.list(video_id)
             transcript = listing.find_generated_transcript(["en"])
-            segments = transcript.fetch()
+            return _transcript_to_text(transcript.fetch())
         except Exception:
             return ""
-    return " ".join(seg.get("text", "") for seg in segments).strip()
+    except Exception:
+        return ""
 
 
 def _subtitle_from_ytdlp(info: dict[str, Any]) -> str:
